@@ -1,5 +1,11 @@
 # Atlas — Document Navigation for OpenClaw
 
+[![Release](https://img.shields.io/github/v/release/joshuaswarren/openclaw-atlas)](https://github.com/joshuaswarren/openclaw-atlas/releases)
+[![License: MIT](https://img.shields.io/github/license/joshuaswarren/openclaw-atlas)](LICENSE)
+[![OpenClaw Plugin](https://img.shields.io/badge/OpenClaw-plugin-blue)](https://github.com/openclaw/openclaw)
+[![PageIndex](https://img.shields.io/badge/PageIndex-integrated-green)](https://github.com/VectifyAI/PageIndex)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.6-blue)](https://www.typescriptlang.org/)
+
 **Atlas** is an OpenClaw plugin that provides intelligent document indexing and navigation using [PageIndex](https://github.com/VectifyAI/PageIndex), a vectorless, reasoning-based RAG system with **production-ready scaling for 5000+ documents**.
 
 ## ✨ What It Does
