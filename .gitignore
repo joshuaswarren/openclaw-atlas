@@ -1,0 +1,25 @@
+node_modules/
+dist/
+*.log
+.DS_Store
+
+# User data - NEVER commit
+documents/
+collections/
+state/
+
+# Indexes - NEVER commit
+indexes/
+*.index/
+*.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Tests
+test-data/
+*.test.pdf
+*.test.md

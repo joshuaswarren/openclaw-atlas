@@ -1,0 +1,47 @@
+{
+  "name": "openclaw-atlas",
+  "version": "0.2.0",
+  "description": "Document indexing and navigation using PageIndex for OpenClaw",
+  "type": "module",
+  "keywords": [
+    "openclaw",
+    "plugin",
+    "atlas",
+    "documents",
+    "pageindex",
+    "rag",
+    "scaling",
+    "async-indexing"
+  ],
+  "license": "MIT",
+  "author": "Joshua Warren",
+  "main": "dist/index.js",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "openclaw.plugin.json"
+  ],
+  "peerDependencies": {
+    "openclaw": "*"
+  },
+  "openclaw": {
+    "plugin": "./openclaw.plugin.json",
+    "extensions": [
+      "./dist/index.js"
+    ]
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "tsup": "^8.4.0",
+    "typescript": "^5.7.3"
+  }
+}

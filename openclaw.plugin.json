@@ -1,0 +1,141 @@
+{
+  "id": "atlas",
+  "kind": "knowledge",
+  "version": "0.2.0",
+  "name": "Atlas",
+  "description": "Document indexing and navigation using PageIndex's vectorless, reasoning-based RAG with scaling support for 5000+ documents",
+  "author": "Joshua Warren",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "enabled": {
+        "type": "boolean",
+        "default": true,
+        "description": "Enable Atlas document indexing"
+      },
+      "pageindexPath": {
+        "type": "string",
+        "description": "Path to PageIndex CLI (or set PAGEINDEX_PATH env var)"
+      },
+      "documentsDir": {
+        "type": "string",
+        "description": "Override documents storage directory"
+      },
+      "indexOnStartup": {
+        "type": "boolean",
+        "default": false,
+        "description": "Automatically index documents on plugin startup"
+      },
+      "maxResults": {
+        "type": "number",
+        "default": 5,
+        "description": "Max document search results to return"
+      },
+      "contextTokens": {
+        "type": "number",
+        "default": 1500,
+        "description": "Max tokens to inject from document context"
+      },
+      "supportedExtensions": {
+        "type": "array",
+        "items": { "type": "string" },
+        "default": [".pdf", ".md", ".txt", ".html", ".htm"],
+        "description": "File extensions to index"
+      },
+      "debug": {
+        "type": "boolean",
+        "default": false,
+        "description": "Enable debug logging"
+      },
+      "asyncIndexing": {
+        "type": "boolean",
+        "default": true,
+        "description": "Enable asynchronous background indexing for large collections"
+      },
+      "maxConcurrentIndexes": {
+        "type": "number",
+        "default": 3,
+        "description": "Maximum number of concurrent indexing jobs"
+      },
+      "cacheEnabled": {
+        "type": "boolean",
+        "default": true,
+        "description": "Enable search result caching"
+      },
+      "cacheTtl": {
+        "type": "number",
+        "default": 300000,
+        "description": "Cache TTL in milliseconds (default: 5 minutes)"
+      },
+      "shardThreshold": {
+        "type": "number",
+        "default": 500,
+        "description": "Automatically shard collections larger than this threshold"
+      }
+    }
+  },
+  "uiHints": {
+    "enabled": {
+      "label": "Enable Atlas",
+      "help": "Index and search through document collections"
+    },
+    "pageindexPath": {
+      "label": "PageIndex Path",
+      "advanced": true,
+      "placeholder": "/usr/local/bin/pageindex"
+    },
+    "documentsDir": {
+      "label": "Documents Directory",
+      "advanced": true,
+      "placeholder": "~/.openclaw/workspace/documents"
+    },
+    "indexOnStartup": {
+      "label": "Auto-Index on Startup",
+      "help": "Automatically index documents when Atlas loads"
+    },
+    "maxResults": {
+      "label": "Max Search Results",
+      "advanced": true,
+      "placeholder": "5"
+    },
+    "contextTokens": {
+      "label": "Context Tokens",
+      "advanced": true,
+      "placeholder": "1500"
+    },
+    "supportedExtensions": {
+      "label": "Supported File Types",
+      "advanced": true,
+      "help": "File extensions to include in indexing"
+    },
+    "debug": {
+      "label": "Debug Mode",
+      "advanced": true
+    },
+    "asyncIndexing": {
+      "label": "Async Indexing",
+      "help": "Enable non-blocking background indexing for large collections"
+    },
+    "maxConcurrentIndexes": {
+      "label": "Max Concurrent Indexes",
+      "advanced": true,
+      "placeholder": "3"
+    },
+    "cacheEnabled": {
+      "label": "Enable Cache",
+      "help": "Cache search results for faster repeated queries"
+    },
+    "cacheTtl": {
+      "label": "Cache TTL (ms)",
+      "advanced": true,
+      "placeholder": "300000"
+    },
+    "shardThreshold": {
+      "label": "Shard Threshold",
+      "help": "Automatically shard collections larger than this",
+      "advanced": true,
+      "placeholder": "500"
+    }
+  }
+}
