@@ -1,31 +1,42 @@
-/**
- * Logger wrapper for Atlas plugin
- */
-
-export interface Logger {
-  debug(...args: unknown[]): void;
-  info(...args: unknown[]): void;
-  warn(...args: unknown[]): void;
-  error(...args: unknown[]): void;
+export interface LoggerBackend {
+  info(msg: string, ...args: unknown[]): void;
+  warn(msg: string, ...args: unknown[]): void;
+  error(msg: string, ...args: unknown[]): void;
+  debug?(msg: string, ...args: unknown[]): void;
 }
 
-let prefix = "[atlas]";
+const NOOP_LOGGER: LoggerBackend = {
+  info() {},
+  warn() {},
+  error() {},
+  debug() {},
+};
 
-export function setLoggerPrefix(p: string): void {
-  prefix = p;
+let _backend: LoggerBackend = NOOP_LOGGER;
+let _debug = false;
+
+export function initLogger(backend: LoggerBackend, debug: boolean): void {
+  _backend = backend;
+  _debug = debug;
 }
 
-export const log: Logger = {
-  debug(...args: unknown[]): void {
-    console.debug(prefix, ...args);
+export const log = {
+  info(msg: string, ...args: unknown[]): void {
+    _backend.info(`openclaw-atlas: ${msg}`, ...args);
   },
-  info(...args: unknown[]): void {
-    console.info(prefix, ...args);
+  warn(msg: string, ...args: unknown[]): void {
+    _backend.warn(`openclaw-atlas: ${msg}`, ...args);
   },
-  warn(...args: unknown[]): void {
-    console.warn(prefix, ...args);
+  error(msg: string, err?: unknown): void {
+    const detail =
+      err instanceof Error ? err.message : err ? String(err) : "";
+    _backend.error(
+      `openclaw-atlas: ${msg}${detail ? ` — ${detail}` : ""}`,
+    );
   },
-  error(...args: unknown[]): void {
-    console.error(prefix, ...args);
+  debug(msg: string, ...args: unknown[]): void {
+    if (!_debug) return;
+    const fn = _backend.debug ?? _backend.info;
+    fn(`openclaw-atlas [debug]: ${msg}`, ...args);
   },
 };

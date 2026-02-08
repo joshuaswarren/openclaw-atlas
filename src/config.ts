@@ -35,6 +35,7 @@ export function parseConfig(raw: unknown): PluginConfig {
       ? (cfg.supportedExtensions as string[])
       : DEFAULT_SUPPORTED_EXTENSIONS,
     debug: cfg.debug === true,
+    llmModel: typeof cfg.llmModel === "string" ? cfg.llmModel : undefined,
     // Scaling options
     asyncIndexing: cfg.asyncIndexing !== false, // default true
     maxConcurrentIndexes: typeof cfg.maxConcurrentIndexes === "number"

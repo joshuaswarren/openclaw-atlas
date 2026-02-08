@@ -11,6 +11,7 @@ export interface PluginConfig {
   contextTokens: number;
   supportedExtensions: string[];
   debug: boolean;
+  llmModel?: string;
   // Scaling options
   asyncIndexing?: boolean;
   maxConcurrentIndexes?: number;
