@@ -1,209 +1,209 @@
-import { log } from "./logger.js";
-import type {
-  PageIndexClient,
-  PluginConfig,
-  StorageManager,
-} from "./types.js";
-
 /**
- * Register Atlas CLI commands
+ * CLI commands for Atlas document search
  */
-export function registerCommands(
-  api: {
-    registerCommand: (def: {
-      name: string;
-      description: string;
-      handler: (...args: string[]) => Promise<void>;
-    }) => void;
-  },
-  pageindex: PageIndexClient,
-  storage: StorageManager,
-  config: PluginConfig,
-): void {
-  /**
-   * Search documents
-   */
-  api.registerCommand({
-    name: "atlas",
-    description: "Document indexing and navigation using PageIndex",
-    handler: async (args: string[]) => {
-      if (args.length === 0) {
-        console.log(`
+
+import type { ReplyPayload } from "openclaw/plugin-sdk";
+import { PageIndex } from "openclaw-pageindex";
+import { log } from "./logger.js";
+import type { PluginConfig } from "./types.js";
+
+const ATLAS_USAGE = `
 🗺️  Atlas — Document Navigation
 
 Usage:
   openclaw atlas search <query>       Search indexed documents
   openclaw atlas index <path>         Index a document or directory
   openclaw atlas collections          List all collections
-  openclaw atlas status               Show indexing status
+  openclaw atlas stats               Show index statistics
 
-For more help: https://github.com/your-repo/openclaw-atlas
-        `);
-        return;
+Examples:
+  openclaw atlas search "machine learning"
+  openclaw atlas index ./docs/report.pdf
+  openclaw atlas collections
+
+For more help: https://github.com/joshuaswarren/openclaw-atlas
+`;
+
+export function registerCommands(
+  api: {
+    registerCommand: (def: {
+      name: string;
+      description: string;
+      acceptsArgs?: boolean;
+      requireAuth?: boolean;
+      handler: (ctx: { args?: string }) => ReplyPayload | Promise<ReplyPayload>;
+    }) => void;
+  },
+  pageindex: PageIndex,
+  config: PluginConfig,
+): void {
+  // Main atlas command group
+  api.registerCommand({
+    name: "atlas",
+    description: "Document indexing and navigation using PageIndex",
+    acceptsArgs: true,
+    requireAuth: false,
+    handler: async (ctx) => {
+      const argsStr = ctx.args?.trim() ?? "";
+      const args = argsStr.split(/\s+/).filter(a => a.length > 0);
+
+      if (args.length === 0) {
+        return { text: ATLAS_USAGE };
       }
 
       const [subcommand, ...subargs] = args;
 
       switch (subcommand) {
         case "search":
-          await handleSearch(pageindex, config, subargs);
-          break;
+          return handleSearch(pageindex, config, subargs);
         case "index":
-          await handleIndex(pageindex, storage, config, subargs);
-          break;
+          return handleIndex(pageindex, subargs);
         case "collections":
-          await handleCollections(storage);
-          break;
-        case "status":
-          await handleStatus(pageindex, storage);
-          break;
+          return handleCollections(pageindex);
+        case "stats":
+          return handleStats(pageindex);
         default:
-          console.error(`❌ Unknown subcommand: ${subcommand}`);
-          console.log(`Available: search, index, collections, status`);
+          return { text: `❌ Unknown subcommand: ${subcommand}\nAvailable: search, index, collections, stats\n${ATLAS_USAGE}` };
       }
     },
   });
+
+  log.info("Atlas CLI commands registered: atlas search, index, collections, stats");
 }
 
-async function handleSearch(
-  pageindex: PageIndexClient,
+function handleSearch(
+  pageindex: PageIndex,
   config: PluginConfig,
   args: string[],
-): Promise<void> {
+): ReplyPayload | Promise<ReplyPayload> {
   if (args.length === 0) {
-    console.error("❌ Query required");
-    console.log("Usage: openclaw atlas search <query>");
-    return;
+    return { text: "❌ Query required\nUsage: openclaw atlas search <query>" };
   }
 
   const query = args.join(" ");
   log.info(`Searching: "${query}"`);
 
-  try {
-    const results = await pageindex.search(query, undefined, config.maxResults);
+  // Execute search asynchronously
+  return (async () => {
+    try {
+      const results = await pageindex.search({
+        query,
+        maxResults: config.maxResults,
+      });
 
-    if (results.length === 0) {
-      console.log(`📭 No results found for "${query}"`);
-      return;
+      if (results.length === 0) {
+        return { text: `📭 No results found for "${query}"` };
+      }
+
+      let output = `📚 Found ${results.length} result(s):\n\n`;
+
+      for (let i = 0; i < results.length; i++) {
+        const result = results[i];
+        output += `### Result ${i + 1}\n`;
+        output += `**Document:** ${result.citation.documentTitle}\n`;
+        if (result.citation.pageNumber) {
+          output += `**Page:** ${result.citation.pageNumber}\n`;
+        }
+        if (result.citation.section) {
+          output += `**Section:** ${result.citation.section}\n`;
+        }
+        output += `**Relevance:** ${(result.relevance * 100).toFixed(1)}%\n\n`;
+        output += `${result.excerpt}\n\n`;
+      }
+
+      return { text: output };
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      return { text: `❌ Search failed: ${errorMsg}` };
     }
-
-    console.log(`📚 Found ${results.length} result(s):\n`);
-
-    for (let i = 0; i < results.length; i++) {
-      const result = results[i];
-      console.log(`### Result ${i + 1}`);
-      console.log(`**Citation:** ${result.citation}`);
-      if (result.page) console.log(`**Page:** ${result.page}`);
-      if (result.section) console.log(`**Section:** ${result.section}`);
-      console.log();
-      console.log(result.content);
-      console.log();
-    }
-  } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : String(err);
-    console.error(`❌ Search failed: ${errorMsg}`);
-  }
+  })();
 }
 
-async function handleIndex(
-  pageindex: PageIndexClient,
-  storage: StorageManager,
-  config: PluginConfig,
-  args: string[],
-): Promise<void> {
+function handleIndex(pageindex: PageIndex, args: string[]): ReplyPayload | Promise<ReplyPayload> {
   if (args.length === 0) {
-    console.error("❌ Path required");
-    console.log("Usage: openclaw atlas index <path> [collection-name]");
-    return;
+    return { text: "❌ Path required\nUsage: openclaw atlas index <path> [collection-name]" };
   }
 
   const targetPath = args[0];
   const collectionName = args[1];
-
   log.info(`Indexing: ${targetPath}`);
 
-  try {
-    const exists = await storage.fileExists(targetPath);
-    if (!exists) {
-      console.error(`❌ Path not found: ${targetPath}`);
-      return;
-    }
+  // Execute index asynchronously
+  return (async () => {
+    try {
+      const docId = await pageindex.addDocument(targetPath, undefined, collectionName);
 
-    const result = await pageindex.buildIndex(targetPath);
-
-    if (result.success) {
-      console.log(`✅ Successfully indexed ${targetPath}`);
-      console.log(`⏱️  Index time: ${result.indexTime}ms`);
-      if (result.nodeCount) console.log(`📊 Nodes: ${result.nodeCount}`);
-
+      let output = `✅ Successfully indexed ${targetPath}\n`;
+      output += `📄 Document ID: ${docId}\n`;
       if (collectionName) {
-        await storage.registerCollection(collectionName, targetPath);
-        console.log(`📁 Registered to collection: ${collectionName}`);
+        output += `📁 Collection: ${collectionName}`;
       }
-    } else {
-      console.error(`❌ Indexing failed: ${result.error}`);
+
+      return { text: output };
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      return { text: `❌ Indexing failed: ${errorMsg}` };
     }
-  } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : String(err);
-    console.error(`❌ Indexing failed: ${errorMsg}`);
-  }
+  })();
 }
 
-async function handleCollections(storage: StorageManager): Promise<void> {
+function handleCollections(pageindex: PageIndex): ReplyPayload | Promise<ReplyPayload> {
   log.info("Listing collections");
 
-  try {
-    const collections = await storage.getCollections();
+  // Execute collections list asynchronously
+  return (async () => {
+    try {
+      const collections = pageindex.listCollections();
+      const stats = pageindex.getStats();
 
-    if (collections.length === 0) {
-      console.log("📭 No collections found.");
-      console.log("Index documents with: openclaw atlas index <path>");
-      return;
+      if (collections.length === 0) {
+        return { text: "📭 No collections found.\nIndex documents with: openclaw atlas index <path>" };
+      }
+
+      let output = `📚 Atlas Collections (${collections.length}):\n\n`;
+
+      for (const coll of collections) {
+        output += `**${coll.name}**\n`;
+        output += `  Documents: ${coll.documentCount}\n`;
+        if (coll.indexedAt) {
+          output += `  Indexed: ${coll.indexedAt}\n`;
+        }
+        if (coll.lastModified) {
+          output += `  Modified: ${coll.lastModified}`;
+        }
+        output += "\n";
+      }
+
+      output += `**Total Documents:** ${stats.totalDocuments}\n`;
+      output += `**Total Nodes:** ${stats.totalNodes}`;
+
+      return { text: output };
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      return { text: `❌ Failed to list collections: ${errorMsg}` };
     }
-
-    console.log(`📚 Atlas Collections (${collections.length}):\n`);
-
-    for (const coll of collections) {
-      console.log(`**${coll.name}**`);
-      console.log(`  Path: ${coll.path}`);
-      console.log(`  Documents: ${coll.documentCount}`);
-      if (coll.indexedAt) console.log(`  Indexed: ${coll.indexedAt}`);
-      if (coll.lastModified) console.log(`  Modified: ${coll.lastModified}`);
-      console.log();
-    }
-  } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : String(err);
-    console.error(`❌ Failed to list collections: ${errorMsg}`);
-  }
+  })();
 }
 
-async function handleStatus(
-  pageindex: PageIndexClient,
-  storage: StorageManager,
-): Promise<void> {
-  log.info("Checking Atlas status");
+function handleStats(pageindex: PageIndex): ReplyPayload | Promise<ReplyPayload> {
+  log.info("Getting stats");
 
-  try {
-    const metadata = await storage.loadMetadata();
-    const collections = await storage.getCollections();
+  // Execute stats asynchronously
+  return (async () => {
+    try {
+      const stats = pageindex.getStats();
 
-    console.log(`🗺️  Atlas Status\n`);
-    console.log(`**PageIndex:** ${pageindex.isAvailable() ? "✅ Available" : "❌ Not Available"}`);
-    console.log(`**Collections:** ${collections.length}`);
-    console.log(`**Total Documents:** ${metadata.totalDocuments}`);
-    console.log(`**Last Index:** ${metadata.lastIndexedAt}\n`);
+      let output = `🗺️  Atlas Statistics\n\n`;
+      output += `**Total Documents:** ${stats.totalDocuments}\n`;
+      output += `**Total Nodes:** ${stats.totalNodes}\n`;
+      output += `**Total Characters:** ${stats.totalChars.toLocaleString()}\n`;
+      output += `**Index Size:** ${(stats.indexSize / 1024).toFixed(2)} KB\n`;
+      output += `**Last Updated:** ${stats.lastUpdated}`;
 
-    if (collections.length > 0) {
-      console.log(`### Collections`);
-      for (const coll of collections.slice(0, 5)) {
-        console.log(`- **${coll.name}**: ${coll.documentCount} docs`);
-      }
-      if (collections.length > 5) {
-        console.log(`- ... and ${collections.length - 5} more`);
-      }
+      return { text: output };
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      return { text: `❌ Failed to get stats: ${errorMsg}` };
     }
-  } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : String(err);
-    console.error(`❌ Status check failed: ${errorMsg}`);
-  }
+  })();
 }

@@ -46,5 +46,14 @@ export function parseConfig(raw: unknown): PluginConfig {
     shardThreshold: typeof cfg.shardThreshold === "number"
       ? cfg.shardThreshold
       : 500, // shard collections > 500 docs
+    // Local LLM Provider
+    localLlmEnabled: cfg.localLlmEnabled === true, // default false
+    localLlmUrl: typeof cfg.localLlmUrl === "string" && cfg.localLlmUrl.length > 0
+      ? cfg.localLlmUrl
+      : "http://localhost:1234/v1",
+    localLlmModel: typeof cfg.localLlmModel === "string" && cfg.localLlmModel.length > 0
+      ? cfg.localLlmModel
+      : "local-model",
+    localLlmFallback: cfg.localLlmFallback !== false, // default true
   };
 }

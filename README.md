@@ -20,6 +20,7 @@ Atlas transforms your document collections into navigable knowledge maps:
 - 🔄 **Incremental updates** — Only index changed documents
 - 📦 **Smart sharding** — Split large collections automatically
 - 💾 **Result caching** — Lightning-fast repeated queries
+- 🏠 **Local LLM support** — Use Ollama, LM Studio, MLX, vLLM with automatic cloud fallback
 
 ## 🚀 Scaling Capabilities
 
@@ -116,6 +117,33 @@ plugins:
 ```
 
 See **[SCALING.md](SCALING.md)** for detailed scaling configuration.
+
+### Local LLM Configuration
+
+Atlas supports local LLM providers (Ollama, LM Studio, MLX, vLLM) with automatic fallback to cloud models:
+
+```yaml
+plugins:
+  - id: atlas
+    # Local LLM (optional)
+    localLlmEnabled: true                    # Enable local LLM
+    localLlmUrl: http://localhost:1234/v1   # Auto-detects Ollama/LM Studio/MLX/vLLM
+    localLlmModel: qwen3-coder-30b-a3b-instruct-mlx@8bit  # Your local model
+    localLlmFallback: true                  # Fall back to cloud if unavailable
+```
+
+**Supported Local LLM Providers:**
+- **Ollama** (`http://localhost:11434`) — Models like `llama3`, `deepseek-r1`
+- **LM Studio** (`http://localhost:1234/v1`) — Any OpenAI-compatible model
+- **MLX** (`http://localhost:8080`) — Apple Silicon optimized models
+- **vLLM** (`http://localhost:8000`) — Fast inference server
+
+**Fallback Chain:**
+1. Local LLM (if enabled)
+2. Gateway's primary model
+3. Gateway's fallback models (full chain)
+
+This means Atlas can use **different models** than your gateway's default — configure independently!
 
 ## 🎮 Usage
 

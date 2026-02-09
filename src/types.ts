@@ -18,6 +18,11 @@ export interface PluginConfig {
   cacheEnabled?: boolean;
   cacheTtl?: number;
   shardThreshold?: number;
+  // Local LLM Provider
+  localLlmEnabled?: boolean;
+  localLlmUrl?: string;
+  localLlmModel?: string;
+  localLlmFallback?: boolean;
 }
 
 export interface DocumentCollection {

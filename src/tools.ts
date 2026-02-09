@@ -1,249 +1,166 @@
-import { log } from "./logger.js";
-import type { PluginConfig } from "./types.js";
-import type { PageIndexClient } from "./pageindex.js";
-import type { StorageManager } from "./storage.js";
-
 /**
- * Register Atlas tools for agent use
+ * Agent tools for Atlas document search
  */
-export function registerTools(
-  api: {
-    registerTool: (def: {
-      name: string;
-      description: string;
-      parameters: unknown;
-      handler: (params: Record<string, unknown>) => Promise<string>;
-    }) => void;
-  },
-  pageindex: PageIndexClient,
-  storage: StorageManager,
-  config: PluginConfig,
-): void {
-  /**
-   * Search through indexed documents
-   */
+
+import type { OpenClawToolApi } from "openclaw/plugin-sdk";
+import { PageIndex } from "openclaw-pageindex";
+import { log } from "./logger.js";
+
+export function registerTools(api: OpenClawToolApi, pageindex: PageIndex): void {
+  // atlas_search - Search indexed documents
   api.registerTool({
     name: "atlas_search",
-    description: `Search through indexed document collections using PageIndex's reasoning-based search.
-Returns relevant document excerpts with precise citations (page numbers, sections).
-
-Use this when you need to:
-- Find specific information in PDFs, reports, or documentation
-- Locate exact passages or sections in long documents
-- Reference authoritative sources with proper citations
-
-The search uses LLM reasoning to navigate document trees, not vector similarity.`,
+    label: "Search Documents",
+    description: "Search through indexed documents using PageIndex's vectorless, LLM-powered search. Returns relevant sections with precise citations including page numbers and section references.",
     parameters: {
       type: "object",
       properties: {
         query: {
           type: "string",
-          description: "Search query - be specific and use keywords from the document",
-        },
-        collection: {
-          type: "string",
-          description: "Optional: specific collection to search (omitted = search all)",
-          optional: true,
+          description: "Search query to find relevant document sections",
         },
         maxResults: {
           type: "number",
-          description: "Maximum results to return (default: 5)",
-          optional: true,
+          description: "Maximum number of results to return (default: 5)",
+        },
+        collection: {
+          type: "string",
+          description: "Optional filter to search only within a specific document collection",
         },
       },
       required: ["query"],
     },
-    handler: async (params: Record<string, unknown>) => {
+    execute: async (toolCallId: string, params: Record<string, unknown>, signal?: AbortSignal) => {
       const query = params.query as string;
+      const maxResults = (params.maxResults as number) ?? 5;
       const collection = params.collection as string | undefined;
-      const maxResults = (params.maxResults as number) ?? config.maxResults;
 
-      if (!query || !query.trim()) {
-        return "❌ Query required - please provide a search term";
-      }
+      log.info("atlas_search:", { query, maxResults, collection });
 
-      log.info(`Searching Atlas: "${query}"`);
+      const results = await pageindex.search({
+        query,
+        maxResults,
+        collection,
+      });
 
-      try {
-        const results = await pageindex.search(query, collection, maxResults);
+      // Format results for agent
+      const formatted = results.map((result) => ({
+        content: result.content,
+        excerpt: result.excerpt,
+        relevance: result.relevance,
+        citation: {
+          document: result.citation.documentTitle,
+          section: result.citation.section,
+          page: result.citation.pageNumber,
+          nodeId: result.citation.nodeId,
+        },
+      }));
 
-        if (results.length === 0) {
-          return `📭 No results found for "${query}"`;
-        }
-
-        let output = `📚 Found ${results.length} result(s) for "${query}":\n\n`;
-
-        for (let i = 0; i < results.length; i++) {
-          const result = results[i];
-          output += `### Result ${i + 1}\n`;
-          output += `**Citation:** ${result.citation}\n`;
-          if (result.page) output += `**Page:** ${result.page}\n`;
-          if (result.section) output += `**Section:** ${result.section}\n`;
-          output += `\n${result.content}\n\n`;
-        }
-
-        return output;
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : String(err);
-        log.error(`Search failed: ${errorMsg}`);
-        return `❌ Search failed: ${errorMsg}`;
-      }
+      return {
+        success: true,
+        results: formatted,
+        count: formatted.length,
+        query,
+      };
     },
   });
 
-  /**
-   * Index a new document or directory
-   */
+  // atlas_collections - List document collections
+  api.registerTool({
+    name: "atlas_collections",
+    label: "List Collections",
+    description: "List all available document collections with their document counts and metadata. Useful for understanding what documents are available for search.",
+    parameters: {
+      type: "object",
+      properties: {},
+    },
+    execute: async (toolCallId: string, params: Record<string, unknown>, signal?: AbortSignal) => {
+      log.info("atlas_collections: listing collections");
+
+      const collections = pageindex.listCollections();
+      const stats = pageindex.getStats();
+
+      return {
+        success: true,
+        collections: collections.map((col) => ({
+          name: col.name,
+          documentCount: col.documentCount,
+          indexedAt: col.indexedAt,
+          lastModified: col.lastModified,
+        })),
+        totalDocuments: stats.totalDocuments,
+        totalNodes: stats.totalNodes,
+      };
+    },
+  });
+
+  // atlas_index - Add documents to the index
   api.registerTool({
     name: "atlas_index",
-    description: `Index a document or directory for search using PageIndex.
-
-Supported formats: PDF, Markdown, TXT, HTML
-Indexing builds a hierarchical tree structure for reasoning-based retrieval.
-
-Use this when you need to:
-- Add new documents to the search index
-- Re-index modified documents
-- Build an index for a document directory`,
+    label: "Index Document",
+    description: "Add a document to the PageIndex. Supports PDF, Markdown, HTML, and plain text files. Document is parsed into a hierarchical tree and made available for search.",
     parameters: {
       type: "object",
       properties: {
         path: {
           type: "string",
-          description: "Path to document file or directory to index",
+          description: "Path or URL to the document to index",
+        },
+        content: {
+          type: "string",
+          description: "Optional direct text content (for programmatic indexing)",
         },
         collection: {
           type: "string",
-          description: "Collection name for organizing documents",
-          optional: true,
+          description: "Optional collection name to organize this document",
         },
       },
       required: ["path"],
     },
-    handler: async (params: Record<string, unknown>) => {
-      const targetPath = params.path as string;
-      const collectionName = params.collection as string | undefined;
+    execute: async (toolCallId: string, params: Record<string, unknown>, signal?: AbortSignal) => {
+      const path = params.path as string;
+      const content = params.content as string | undefined;
+      const collection = params.collection as string | undefined;
 
-      if (!targetPath) {
-        return "❌ Path required - please provide a document or directory path";
-      }
+      log.info("atlas_index:", { path, hasContent: !!content, collection });
 
-      log.info(`Indexing: ${targetPath}`);
+      const docId = await pageindex.addDocument(path, content, collection);
 
-      try {
-        const exists = await storage.fileExists(targetPath);
-        if (!exists) {
-          return `❌ Path not found: ${targetPath}`;
-        }
-
-        const result = await pageindex.buildIndex(targetPath);
-
-        if (result.success) {
-          let output = `✅ Successfully indexed ${targetPath}\n`;
-          output += `⏱️  Index time: ${result.indexTime}ms\n`;
-          if (result.nodeCount) output += `📊 Nodes: ${result.nodeCount}\n`;
-
-          // Register collection if specified
-          if (collectionName) {
-            await storage.registerCollection(collectionName, targetPath);
-            output += `📁 Registered to collection: ${collectionName}\n`;
-          }
-
-          return output;
-        } else {
-          return `❌ Indexing failed: ${result.error}`;
-        }
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : String(err);
-        log.error(`Indexing failed: ${errorMsg}`);
-        return `❌ Indexing failed: ${errorMsg}`;
-      }
+      return {
+        success: true,
+        documentId: docId,
+        path,
+        collection: collection || "default",
+      };
     },
   });
 
-  /**
-   * List all document collections
-   */
+  // atlas_stats - Get index statistics
   api.registerTool({
-    name: "atlas_collections",
-    description: `List all document collections registered in Atlas.
-
-Shows collection names, paths, document counts, and indexing status.`,
+    name: "atlas_stats",
+    label: "Index Statistics",
+    description: "Get detailed statistics about the PageIndex including total documents, nodes, characters, and index size.",
     parameters: {
       type: "object",
       properties: {},
     },
-    handler: async () => {
-      log.info("Listing collections");
+    execute: async (toolCallId: string, params: Record<string, unknown>, signal?: AbortSignal) => {
+      log.info("atlas_stats: getting stats");
 
-      try {
-        const collections = await storage.getCollections();
+      const stats = pageindex.getStats();
 
-        if (collections.length === 0) {
-          return "📭 No collections found. Index documents with atlas_index to get started.";
-        }
-
-        let output = `📚 Atlas Collections (${collections.length}):\n\n`;
-
-        for (const coll of collections) {
-          output += `**${coll.name}**\n`;
-          output += `- Path: ${coll.path}\n`;
-          output += `- Documents: ${coll.documentCount}\n`;
-          if (coll.indexedAt) output += `- Indexed: ${coll.indexedAt}\n`;
-          if (coll.lastModified) output += `- Modified: ${coll.lastModified}\n`;
-          output += `\n`;
-        }
-
-        return output;
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : String(err);
-        log.error(`Failed to list collections: ${errorMsg}`);
-        return `❌ Failed to list collections: ${errorMsg}`;
-      }
+      return {
+        success: true,
+        stats: {
+          totalDocuments: stats.totalDocuments,
+          totalNodes: stats.totalNodes,
+          totalChars: stats.totalChars,
+          indexSize: stats.indexSize,
+          lastUpdated: stats.lastUpdated,
+        },
+      };
     },
   });
 
-  /**
-   * Get Atlas status and stats
-   */
-  api.registerTool({
-    name: "atlas_status",
-    description: `Get Atlas indexing status and statistics.
-
-Shows PageIndex availability, collection counts, and system health.`,
-    parameters: {
-      type: "object",
-      properties: {},
-    },
-    handler: async () => {
-      log.info("Checking Atlas status");
-
-      try {
-        const metadata = await storage.loadMetadata();
-        const collections = await storage.getCollections();
-
-        let output = `🗺️  Atlas Status\n\n`;
-        output += `**PageIndex:** ${pageindex.isAvailable() ? "✅ Available" : "❌ Not Available"}\n`;
-        output += `**Collections:** ${collections.length}\n`;
-        output += `**Total Documents:** ${metadata.totalDocuments}\n`;
-        output += `**Last Index:** ${metadata.lastIndexedAt}\n\n`;
-
-        if (collections.length > 0) {
-          output += `### Collections\n`;
-          for (const coll of collections.slice(0, 5)) {
-            output += `- **${coll.name}**: ${coll.documentCount} docs\n`;
-          }
-          if (collections.length > 5) {
-            output += `- ... and ${collections.length - 5} more\n`;
-          }
-        }
-
-        return output;
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : String(err);
-        log.error(`Status check failed: ${errorMsg}`);
-        return `❌ Status check failed: ${errorMsg}`;
-      }
-    },
-  });
+  log.info("Atlas agent tools registered: atlas_search, atlas_collections, atlas_index, atlas_stats");
 }

@@ -45,6 +45,6 @@
     "typescript": "^5.7.3"
   },
   "dependencies": {
-    "pageindex-ts": "file:../pageindex-ts"
+    "openclaw-pageindex": "file:../openclaw-pageindex"
   }
 }

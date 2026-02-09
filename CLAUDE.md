@@ -37,7 +37,8 @@ src/
 ├── types.ts              # TypeScript interfaces
 ├── config.ts             # Config parsing with defaults
 ├── logger.ts             # Logging wrapper
-├── pageindex.ts          # PageIndex API client
+├── fallback-llm.ts      # Gateway fallback chain client
+├── local-llm.ts          # Local LLM client (Ollama, LM Studio, MLX, vLLM)
 ├── storage.ts            # Document file management
 ├── tools.ts              # Agent tools (search, index, status)
 └── cli.ts                # CLI commands
@@ -128,11 +129,51 @@ pageindex info /path/to/document.pdf
     └── index-cache.json   # Index status tracking
 ```
 
+## Local LLM Integration
+
+### Overview
+Atlas now supports **local LLM providers** with automatic fallback to the gateway's cloud models:
+
+**Supported Providers:**
+- **Ollama** (`http://localhost:11434`) — Open-source models
+- **LM Studio** (`http://localhost:1234/v1`) — GUI-based model server
+- **MLX** (`http://localhost:8080`) — Apple Silicon optimized
+- **vLLM** (`http://localhost:8000`) — Fast inference server
+
+### Implementation
+- **`fallback-llm.ts`** — Walks through gateway's fallback chain (primary + fallbacks)
+- **`local-llm.ts`** — Auto-detects and connects to local LLM servers
+- **Custom LLM client** — Bridges local/fallback clients to PageIndex's `LLMClientFunction`
+- **Independent configuration** — Atlas can use different models than gateway default
+
+### Configuration
+```json
+{
+  "plugins": {
+    "openclaw-atlas": {
+      "config": {
+        "localLlmEnabled": true,
+        "localLlmUrl": "http://localhost:1234/v1",
+        "localLlmModel": "qwen3-coder-30b-a3b-instruct-mlx@8bit",
+        "localLlmFallback": true
+      }
+    }
+  }
+}
+```
+
+### Fallback Hierarchy
+1. **Local LLM** (if enabled and available)
+2. **Gateway primary model** (from `agents.defaults.model.primary`)
+3. **Gateway fallbacks array** (full chain traversal)
+
 ## Future Enhancements
 
+- [x] Local LLM support (Ollama, LM Studio, MLX, vLLM)
+- [x] Gateway fallback chain integration
 - [ ] Multi-format support (DOCX, PPTX)
 - [ ] Incremental indexing (update on file change)
 - [ ] Collection tagging/folders
-- [ ] Search result caching
+- [ ] Search result caching (enabled but needs CLI commands)
 - [ ] Hybrid search (Atlas + Engram unified)
 - [ ] Document preview snippets

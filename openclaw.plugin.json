@@ -72,6 +72,26 @@
         "type": "number",
         "default": 500,
         "description": "Automatically shard collections larger than this threshold"
+      },
+      "localLlmEnabled": {
+        "type": "boolean",
+        "default": false,
+        "description": "Enable local LLM (Ollama, LM Studio, MLX, vLLM) with automatic fallback to gateway's LLM chain"
+      },
+      "localLlmUrl": {
+        "type": "string",
+        "default": "http://localhost:1234/v1",
+        "description": "Local LLM server URL (auto-detects Ollama, LM Studio, MLX, vLLM)"
+      },
+      "localLlmModel": {
+        "type": "string",
+        "default": "local-model",
+        "description": "Model name for local LLM requests"
+      },
+      "localLlmFallback": {
+        "type": "boolean",
+        "default": true,
+        "description": "Fall back to gateway's LLM chain if local LLM is unavailable or fails"
       }
     }
   },
@@ -136,6 +156,25 @@
       "help": "Automatically shard collections larger than this",
       "advanced": true,
       "placeholder": "500"
+    },
+    "localLlmEnabled": {
+      "label": "Local LLM (Experimental)",
+      "help": "Use local LLM (Ollama, LM Studio, MLX, vLLM) with automatic cloud fallback if unavailable"
+    },
+    "localLlmUrl": {
+      "label": "Local LLM URL",
+      "advanced": true,
+      "placeholder": "http://localhost:1234/v1"
+    },
+    "localLlmModel": {
+      "label": "Local LLM Model",
+      "advanced": true,
+      "placeholder": "local-model"
+    },
+    "localLlmFallback": {
+      "label": "Allow Cloud Fallback",
+      "help": "Fall back to gateway's LLM chain if local LLM is unavailable or fails",
+      "advanced": true
     }
   }
 }
