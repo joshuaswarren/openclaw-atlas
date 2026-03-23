@@ -185,8 +185,11 @@ export default {
       };
     }
 
-    // Initialize PageIndex with gateway's LLM configuration and custom client
-    const pageindex = new PageIndex({
+    // Reuse a single PageIndex across multiple register() calls so that
+    // indexed documents are not lost when the gateway re-registers the plugin
+    // (which happens ~88 times per boot for different api objects).
+    const ATLAS_PAGEINDEX = "__openclawAtlasPageIndex";
+    const pageindex: PageIndex = (globalThis as any)[ATLAS_PAGEINDEX] ?? new PageIndex({
       llmProvider: {
         name: gatewayProvider.name,
         model: gatewayProvider.model,
@@ -198,6 +201,7 @@ export default {
       cacheSize: 100,
       debug: cfg.debug,
     });
+    (globalThis as any)[ATLAS_PAGEINDEX] = pageindex;
 
     // Check local LLM availability for logging
     if (cfg.localLlmEnabled) {
