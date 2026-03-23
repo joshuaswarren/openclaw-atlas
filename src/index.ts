@@ -241,70 +241,75 @@ export default {
       const supportedExts = cfg.supportedExtensions ?? [".pdf", ".md", ".txt", ".html", ".htm"];
       const YIELD_BATCH = 5;
       import("node:fs/promises").then(async (fs) => {
-        import("node:path").then(async (path) => {
-          // Load index state for incremental indexing
-          const stateDir = path.join(docsDir, ".atlas-index-state");
-          let indexState: Record<string, { mtimeMs: number; size: number }> = {};
-          try {
-            await fs.mkdir(stateDir, { recursive: true });
-            const raw = await fs.readFile(path.join(stateDir, "state.json"), "utf-8");
-            indexState = JSON.parse(raw);
-          } catch { /* no prior state — index everything */ }
+        const path = await import("node:path");
+        // Load index state for incremental indexing
+        const stateDir = path.join(docsDir, ".atlas-index-state");
+        let indexState: Record<string, { mtimeMs: number; size: number }> = {};
+        try {
+          await fs.mkdir(stateDir, { recursive: true });
+          const raw = await fs.readFile(path.join(stateDir, "state.json"), "utf-8");
+          indexState = JSON.parse(raw);
+        } catch { /* no prior state — index everything */ }
 
-          let fileCount = 0;
-          let skipped = 0;
-          let indexed = 0;
+        let fileCount = 0;
+        let skipped = 0;
+        let indexed = 0;
 
-          const indexDir = async (dir: string): Promise<void> => {
-            let entries: import("node:fs").Dirent[];
-            try { entries = await fs.readdir(dir, { withFileTypes: true }); } catch { return; }
-            for (const entry of entries) {
-              const full = path.join(dir, entry.name);
-              if (entry.isDirectory()) {
-                if (entry.name === ".atlas-index-state") continue;
-                await indexDir(full);
-              } else if (entry.isFile() && supportedExts.includes(path.extname(entry.name).toLowerCase())) {
-                // Incremental: skip files that haven't changed since last index
-                try {
-                  const fileStat = await fs.stat(full);
-                  const prev = indexState[full];
-                  if (prev && prev.mtimeMs === fileStat.mtimeMs && prev.size === fileStat.size) {
-                    skipped++;
-                    fileCount++;
-                    if (fileCount % YIELD_BATCH === 0) {
-                      await new Promise<void>((r) => setImmediate(r));
-                    }
-                    continue;
+        const indexDir = async (dir: string): Promise<void> => {
+          let entries: import("node:fs").Dirent[];
+          try { entries = await fs.readdir(dir, { withFileTypes: true }); } catch { return; }
+          for (const entry of entries) {
+            const full = path.join(dir, entry.name);
+            if (entry.isDirectory()) {
+              if (entry.name === ".atlas-index-state") continue;
+              await indexDir(full);
+            } else if (entry.isFile() && supportedExts.includes(path.extname(entry.name).toLowerCase())) {
+              // Incremental: skip files that haven't changed since last index
+              try {
+                const fileStat = await fs.stat(full);
+                const prev = indexState[full];
+                if (prev && prev.mtimeMs === fileStat.mtimeMs && prev.size === fileStat.size) {
+                  skipped++;
+                  fileCount++;
+                  if (fileCount % YIELD_BATCH === 0) {
+                    await new Promise<void>((r) => setImmediate(r));
                   }
-                  await pageindex.addDocument(full);
-                  indexState[full] = { mtimeMs: fileStat.mtimeMs, size: fileStat.size };
-                  indexed++;
-                  log.info(`Atlas indexOnStartup: indexed ${full}`);
-                } catch (err) {
-                  log.warn(`Atlas indexOnStartup: failed to index ${full}:`, err);
+                  continue;
                 }
-                fileCount++;
-                // Yield the event loop every YIELD_BATCH files
-                if (fileCount % YIELD_BATCH === 0) {
-                  await new Promise<void>((r) => setImmediate(r));
-                }
+                await pageindex.addDocument(full);
+                indexState[full] = { mtimeMs: fileStat.mtimeMs, size: fileStat.size };
+                indexed++;
+                log.info(`Atlas indexOnStartup: indexed ${full}`);
+              } catch (err) {
+                log.warn(`Atlas indexOnStartup: failed to index ${full}:`, err);
+              }
+              fileCount++;
+              // Yield the event loop every YIELD_BATCH files
+              if (fileCount % YIELD_BATCH === 0) {
+                await new Promise<void>((r) => setImmediate(r));
               }
             }
-          };
-          log.info(`Atlas indexOnStartup: scanning ${docsDir} ...`);
-          await indexDir(docsDir);
-          // Persist state for next startup
-          try {
-            await fs.writeFile(
-              path.join(stateDir, "state.json"),
-              JSON.stringify(indexState),
-              "utf-8",
-            );
-          } catch (err) {
-            log.warn("Atlas indexOnStartup: failed to save index state:", err);
           }
-          log.info(`Atlas indexOnStartup: complete (indexed=${indexed}, skipped=${skipped}, total=${fileCount})`);
-        });
+        };
+        log.info(`Atlas indexOnStartup: scanning ${docsDir} ...`);
+        await indexDir(docsDir);
+        // Prune state entries for files that no longer exist
+        for (const filePath of Object.keys(indexState)) {
+          try { await fs.stat(filePath); } catch { delete indexState[filePath]; }
+        }
+        // Persist state for next startup
+        try {
+          await fs.writeFile(
+            path.join(stateDir, "state.json"),
+            JSON.stringify(indexState),
+            "utf-8",
+          );
+        } catch (err) {
+          log.warn("Atlas indexOnStartup: failed to save index state:", err);
+        }
+        log.info(`Atlas indexOnStartup: complete (indexed=${indexed}, skipped=${skipped}, total=${fileCount})`);
+      }).catch((err) => {
+        log.error("Atlas indexOnStartup: unexpected error:", err);
       });
     }
 
